@@ -1,6 +1,6 @@
 ## ⚠️ Notice
 
-I am now maintaining an edit of ox_inventory over here instead https://github.com/MrNewb/ox_inventory
+I am now maintaining an edit of ox_inventory with qb-core compatability, more rarity, and runtime items over here instead https://github.com/MrNewb/ox_inventory
 
 This version of `ox_inventory` has been modified to ensure **broad framework compatibility**, now working seamlessly with **qb-core**, **qbox**, **esx**, **ox_core**, and **nd_core**.
 

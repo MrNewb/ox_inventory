@@ -18,11 +18,17 @@ Refer to [NOTICE.md](./NOTICE.md) for additional information and legal notices.
 
 ## ℹ️ About this fork
 
-This is **not** intended to replace the [Overextended](https://github.com/overextended/ox_inventory) release. It exists so **qb-core** users still have a maintained inventory with that compatibility restored — the creator of ox_inventory has declined to distribute an official build with qb-core support.
+This is **not** a replacement for [Overextended](https://github.com/overextended/ox_inventory). Upstream ox_inventory does not ship with qb-core compatibility. This fork restores that support so qb-core servers can use ox_inventory, and is maintained here because upstream does not include qb-core support.
 
-It works like stock ox_inventory. Hard dependencies are **[ox_lib](https://github.com/overextended/ox_lib)** and **[oxmysql](https://github.com/overextended/oxmysql)** — no external inventory bridges or middleman frameworks. You get the same core behaviour, with expanded framework compatibility and a few QoL features that are not in the main version.
+Thanks to the ox team and contributors for releasing under a license that permits forks and modifications like this.
 
-> **Note:** Upstream syncs will continue as time allows. Do **not** report qb-core issues to the ox organization — report them [here](https://github.com/MrNewb/ox_inventory/issues).
+The fork also includes some QoL features common in the FiveM community — rarities, weapon customize, drop props, weapon throw, runtime items, and similar. These are optional extras on top of the stock inventory.
+
+It still behaves like stock ox_inventory. Hard dependencies are **[ox_lib](https://github.com/overextended/ox_lib)** and **[oxmysql](https://github.com/overextended/oxmysql)** — no inventory bridges or middleman frameworks.
+
+**PRs are welcome and encouraged** — more QoL, fixes, polish, whatever makes the fork nicer. See [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+> **Note:** Upstream syncs when there's time. Do **not** report qb-core issues to the ox org — open them [here](https://github.com/MrNewb/ox_inventory/issues).
 
 ### Fork additions
 

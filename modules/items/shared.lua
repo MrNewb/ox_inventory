@@ -117,4 +117,9 @@ end
 
 ItemList.cash = ItemList.money
 
+---@param data OxItem
+function shared.registerItem(data)
+	newItem(data)
+end
+
 return ItemList

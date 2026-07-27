@@ -7,6 +7,8 @@ import { useAppSelector } from '../../store';
 import { selectLeftInventory } from '../../store/inventory';
 import { SlotWithItem } from '../../typings';
 import SlideUp from '../utils/transitions/SlideUp';
+import RarityStar from '../utils/icons/RarityStar';
+import RarityEffect from '../utils/icons/RarityEffect';
 
 const InventoryHotbar: React.FC = () => {
   const [hotbarVisible, setHotbarVisible] = useState(false);
@@ -56,6 +58,8 @@ const InventoryHotbar: React.FC = () => {
                 </div>
                 <div>
                   {item?.durability !== undefined && <WeightBar percent={item.durability} durability />}
+                  {item.metadata?.rarity && <RarityStar rarity={item.metadata.rarity} />}
+                  {item.metadata?.rarity && <RarityEffect rarity={item.metadata.rarity} />}
                   <div className="inventory-slot-label-box">
                     <div className="inventory-slot-label-text">
                       {item.metadata?.label ? item.metadata.label : Items[item.name]?.label || item.name}

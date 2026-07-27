@@ -6,7 +6,7 @@ require 'modules.shops.server'
 require 'modules.pefcl.server'
 
 if GetConvar('inventory:versioncheck', 'true') == 'true' then
-    lib.versionCheck('overextended/ox_inventory')
+    lib.versionCheck('MrNewb/ox_inventory')
 end
 
 local TriggerEventHooks = require 'modules.hooks.server'
@@ -71,6 +71,7 @@ function server.setPlayerInventory(player, data)
         if server.syncInventory then server.syncInventory(inv) end
         TriggerClientEvent('ox_inventory:setPlayerInventory', player.source, Inventory.Drops, inventory, totalWeight,
             inv.player)
+        Items.syncRuntimeItems(player.source)
     end
 end
 

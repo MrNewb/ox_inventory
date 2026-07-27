@@ -14,7 +14,7 @@ end
 
 shared = {
     resource = GetCurrentResourceName(),
-    framework = GetConvar('inventory:framework', 'esx'),
+    framework = GetConvar('inventory:framework', 'qb'),
     playerslots = GetConvarInt('inventory:slots', 50),
     playerweight = GetConvarInt('inventory:weight', 30000),
     target = GetConvarBool('inventory:target', false),
@@ -70,7 +70,10 @@ if IsDuplicityVersion() then
         validhosts = json.decode(GetConvar('inventory:validhosts', [[
 			{
                 "r2.fivemanage.com": true,
-                "i.fmfile.com": true
+                "i.fmfile.com": true,
+                "cdn.discordapp.com": true,
+                "media.discordapp.net": true,
+                "i.ibb.co": true
             }
 		]])),
     }

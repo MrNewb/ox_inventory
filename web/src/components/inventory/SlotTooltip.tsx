@@ -7,6 +7,7 @@ import ClockIcon from '../utils/icons/ClockIcon';
 import { getItemUrl } from '../../helpers';
 import Divider from '../utils/Divider';
 import Markdown from '../utils/Markdown';
+import { getRarityColor } from '../utils/icons/RarityStar';
 
 const SlotTooltip: React.ForwardRefRenderFunction<
   HTMLDivElement,
@@ -82,6 +83,20 @@ const SlotTooltip: React.ForwardRefRenderFunction<
               {item.metadata?.weapontint && (
                 <p>
                   {Locale.ui_tint}: {item.metadata.weapontint}
+                </p>
+              )}
+              {item.metadata?.rarity && (
+                <p>
+                  {Locale.ui_rarity || 'Rarity'}:{' '}
+                  <span
+                    style={{
+                      color: getRarityColor(item.metadata.rarity) || '#ffffff',
+                      fontWeight: 'bold',
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    {item.metadata.rarity}
+                  </span>
                 </p>
               )}
               {additionalMetadata.map((data: { metadata: string; value: string }, index: number) => (

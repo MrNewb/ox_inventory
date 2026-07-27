@@ -13,6 +13,9 @@ import { closeTooltip } from '../../store/tooltip';
 import InventoryContext from './InventoryContext';
 import { closeContextMenu } from '../../store/contextMenu';
 import Fade from '../utils/transitions/Fade';
+import { Items } from '../../store/items';
+import { ItemData } from '../../typings/item';
+import WeaponCustomize from './WeaponCustomize';
 
 const Inventory: React.FC = () => {
   const [inventoryVisible, setInventoryVisible] = useState(false);
@@ -34,6 +37,12 @@ const Inventory: React.FC = () => {
     !inventoryVisible && setInventoryVisible(true);
   });
 
+  useNuiEvent<ItemData[]>('setItemData', (items) => {
+    items.forEach((item) => {
+      Items[item.name] = item;
+    });
+  });
+
   useNuiEvent('refreshSlots', (data) => dispatch(refreshSlots(data)));
 
   useNuiEvent('displayMetadata', (data: Array<{ metadata: string; value: string }>) => {
@@ -51,6 +60,7 @@ const Inventory: React.FC = () => {
           <InventoryContext />
         </div>
       </Fade>
+      <WeaponCustomize />
       <InventoryHotbar />
     </>
   );

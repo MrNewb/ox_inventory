@@ -3,6 +3,8 @@ return {
 		label = 'Test Burger',
 		weight = 220,
 		degrade = 60,
+		rarity = 'legendary',
+		dropModel = `prop_cs_burger_01`,
 		client = {
 			image = 'burger_chicken.png',
 			status = { hunger = 200000 },
@@ -71,6 +73,8 @@ return {
 	['burger'] = {
 		label = 'Burger',
 		weight = 220,
+		rarity = 'sparkle',
+		dropModel = `prop_cs_burger_01`,
 		client = {
 			status = { hunger = 200000 },
 			anim = 'eating',
@@ -83,6 +87,7 @@ return {
 	['sprunk'] = {
 		label = 'Sprunk',
 		weight = 350,
+		dropModel = `prop_ld_can_01`,
 		client = {
 			status = { thirst = 200000 },
 			anim = { dict = 'mp_player_intdrink', clip = 'loop_bottle' },
@@ -96,6 +101,7 @@ return {
 		label = 'Parachute',
 		weight = 8000,
 		stack = false,
+		dropModel = `prop_parachute`,
 		client = {
 			anim = { dict = 'clothingshirt', clip = 'try_shirt_positive_d' },
 			usetime = 1500
@@ -104,6 +110,7 @@ return {
 
 	['garbage'] = {
 		label = 'Garbage',
+		rarity = 'stinky',
 	},
 
 	['paperbag'] = {
@@ -111,7 +118,8 @@ return {
 		weight = 1,
 		stack = false,
 		close = false,
-		consume = 0
+		consume = 0,
+		rarity = 'newb',
 	},
 
 	['identification'] = {
@@ -125,6 +133,7 @@ return {
 		label = 'Knickers',
 		weight = 10,
 		consume = 0,
+		rarity = 'megarainbow',
 		client = {
 			status = { thirst = -100000, stress = -25000 },
 			anim = { dict = 'mp_player_intdrink', clip = 'loop_bottle' },
@@ -136,6 +145,8 @@ return {
 	['lockpick'] = {
 		label = 'Lockpick',
 		weight = 160,
+		rarity = 'cursed',
+		dropModel = `prop_tool_screwdvr02`,
 	},
 
 	['phone'] = {
@@ -143,6 +154,7 @@ return {
 		weight = 190,
 		stack = false,
 		consume = 0,
+		dropModel = `prop_phone_ing`,
 		client = {
 			add = function(total)
 				if total > 0 then
@@ -165,6 +177,8 @@ return {
 	['mustard'] = {
 		label = 'Mustard',
 		weight = 500,
+		rarity = 'toxic',
+		dropModel = `prop_food_mustard`,
 		client = {
 			status = { hunger = 25000, thirst = 25000 },
 			anim = { dict = 'mp_player_intdrink', clip = 'loop_bottle' },
@@ -177,6 +191,8 @@ return {
 	['water'] = {
 		label = 'Water',
 		weight = 500,
+		rarity = 'frost',
+		dropModel = `prop_ld_flow_bottle`,
 		client = {
 			status = { thirst = 200000 },
 			anim = { dict = 'mp_player_intdrink', clip = 'loop_bottle' },
@@ -191,13 +207,17 @@ return {
 		label = 'Radio',
 		weight = 1000,
 		stack = false,
-		allowArmed = true
+		allowArmed = true,
+		rarity = 'electric',
+		dropModel = `prop_cs_hand_radio`,
 	},
 
 	['armour'] = {
 		label = 'Bulletproof Vest',
 		weight = 3000,
 		stack = false,
+		rarity = 'shine',
+		dropModel = `prop_bodyarmour_03`,
 		client = {
 			anim = { dict = 'clothingshirt', clip = 'try_shirt_positive_d' },
 			usetime = 3500
@@ -213,6 +233,7 @@ return {
 		label = 'Fleeca Card',
 		stack = false,
 		weight = 10,
+		rarity = 'glow',
 		client = {
 			image = 'card_bank.png'
 		}
@@ -221,5 +242,7 @@ return {
 	['scrapmetal'] = {
 		label = 'Scrap Metal',
 		weight = 80,
+		rarity = 'fire',
+		dropModel = `prop_rub_binbag_sd_01`,
 	},
 }

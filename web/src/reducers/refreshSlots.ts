@@ -1,5 +1,5 @@
 import { CaseReducer, PayloadAction } from '@reduxjs/toolkit';
-import { itemDurability } from '../helpers';
+import { getItemData, itemDurability } from '../helpers';
 import { inventorySlice } from '../store/inventory';
 import { Items } from '../store/items';
 import { InventoryType, Slot, State } from '../typings';
@@ -26,6 +26,10 @@ export const refreshSlotsReducer: CaseReducer<State, PayloadAction<Payload>> = (
             ? state.rightInventory
             : state.leftInventory
           : state.leftInventory;
+
+        if (data.item.name && typeof Items[data.item.name] === 'undefined') {
+          getItemData(data.item.name);
+        }
 
         data.item.durability = itemDurability(data.item.metadata, curTime);
         targetInventory.items[data.item.slot - 1] = data.item;

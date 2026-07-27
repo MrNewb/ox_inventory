@@ -5,6 +5,7 @@ require 'modules.interface.client'
 
 local Utils = require 'modules.utils.client'
 local Weapon = require 'modules.weapon.client'
+local WeaponCustomize = require 'modules.weapon.customize'
 local currentWeapon
 
 exports('getCurrentWeapon', function()
@@ -48,6 +49,10 @@ local function canOpenInventory()
     end
 
     if IsPauseMenuActive() or invOpen == nil then return end
+
+    if WeaponCustomize.isOpen() then
+        return shared.info('cannot open inventory', '(weapon customize open)')
+    end
 
     if invBusy or (currentWeapon?.timer or 0) > 0 then
         return shared.info('cannot open inventory', '(is busy)')
@@ -1042,15 +1047,72 @@ local function onEnterDrop(point)
 	if not point.instance or point.instance == currentInstance and not point.entity then
 		local model = point.model or client.dropmodel
 
-        -- Prevent breaking inventory on invalid point.model instead use default client.dropmodel
-        if not IsModelValid(model) and not IsModelInCdimage(model) then
-            model = client.dropmodel
-        end
-		lib.requestModel(model)
+		if type(model) == 'string' then
+			model = joaat(model)
+		end
 
-		local entity = CreateObject(model, point.coords.x, point.coords.y, point.coords.z, false, true, true)
+		local entity
 
-		SetModelAsNoLongerNeeded(model)
+		if point.weapon then
+			RequestWeaponAsset(model, 31, 31)
+			local timeout = GetGameTimer() + 5000
+			while not HasWeaponAssetLoaded(model) and GetGameTimer() < timeout do
+				Wait(0)
+			end
+
+			if HasWeaponAssetLoaded(model) then
+				entity = CreateWeaponObject(model, 0, point.coords.x, point.coords.y, point.coords.z, true, 1.0, 0)
+				RemoveWeaponAsset(model)
+
+				if entity and entity ~= 0 then
+					if point.tint then
+						SetWeaponObjectTintIndex(entity, point.tint)
+					end
+
+					local components = point.components
+					if components then
+						for i = 1, #components do
+							local componentItem = Items[components[i]]
+							local hashes = componentItem?.client?.component
+							if hashes then
+								for j = 1, #hashes do
+									if DoesWeaponTakeWeaponComponent(model, hashes[j]) then
+										GiveWeaponComponentToWeaponObject(entity, hashes[j])
+									end
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+
+		if not entity or entity == 0 then
+			-- Weapon drops need CreateWeaponObject; if that failed, use the bag.
+			-- Invalid props: only fall back when the configured model is not in the game.
+			local requested = model
+			if point.weapon or (model ~= client.dropmodel and not IsModelInCdimage(model) and not IsModelValid(model)) then
+				if not point.weapon and model ~= client.dropmodel then
+					warn(('ox_inventory: invalid drop model %s, using default bag'):format(model))
+				end
+				model = client.dropmodel
+			end
+
+			if not lib.requestModel(model) then
+				if model ~= client.dropmodel and lib.requestModel(client.dropmodel) then
+					warn(('ox_inventory: failed to load drop model %s, using default bag'):format(requested))
+					model = client.dropmodel
+				else
+					return
+				end
+			end
+
+			entity = CreateObject(model, point.coords.x, point.coords.y, point.coords.z, false, true, true)
+			SetModelAsNoLongerNeeded(model)
+		end
+
+		if not entity or entity == 0 then return end
+
 		PlaceObjectOnGroundProperly(entity)
 		FreezeEntityPosition(entity, true)
 		SetEntityCollision(entity, false, true)
@@ -1069,16 +1131,23 @@ local function onExitDrop(point)
 end
 
 local function createDrop(dropId, data)
+	local model = data.model
+	if type(model) == 'string' then
+		model = joaat(model)
+	end
+
 	local point = lib.points.new({
 		coords = data.coords,
-		distance = 16,
+		distance = (model or client.dropprops) and 30 or 16,
 		invId = dropId,
 		instance = data.instance,
-		model = data.model
+		model = model,
+		weapon = data.weapon,
+		tint = data.tint,
+		components = data.components,
 	})
 
 	if point.model or client.dropprops then
-		point.distance = 30
 		point.onEnter = onEnterDrop
 		point.onExit = onExitDrop
 	else
@@ -1240,7 +1309,9 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			description = v.description,
 			buttons = buttons,
 			ammoName = v.ammoname,
-			image = v.client?.image
+			image = v.client?.image,
+			weapon = v.weapon,
+			throwable = v.throwable,
 		}
 	end
 
@@ -1780,8 +1851,249 @@ RegisterNUICallback('useButton', function(data, cb)
 	cb(1)
 end)
 
-RegisterNUICallback('exit', function(_, cb)
+local throwingWeapon = false
+
+local function createThrowInstructionalScaleform()
+	local scaleform = lib.requestScaleformMovie('instructional_buttons')
+
+	BeginScaleformMovieMethod(scaleform, 'CLEAR_ALL')
+	EndScaleformMovieMethod()
+
+	BeginScaleformMovieMethod(scaleform, 'SET_CLEAR_SPACE')
+	ScaleformMovieMethodAddParamInt(200)
+	EndScaleformMovieMethod()
+
+	BeginScaleformMovieMethod(scaleform, 'SET_DATA_SLOT')
+	ScaleformMovieMethodAddParamInt(0)
+	ScaleformMovieMethodAddParamPlayerNameString(GetControlInstructionalButton(0, 25, true))
+	BeginTextCommandScaleformString('STRING')
+	AddTextComponentSubstringPlayerName(locale('ui_throw'))
+	EndTextCommandScaleformString()
+	EndScaleformMovieMethod()
+
+	BeginScaleformMovieMethod(scaleform, 'SET_DATA_SLOT')
+	ScaleformMovieMethodAddParamInt(1)
+	ScaleformMovieMethodAddParamPlayerNameString(GetControlInstructionalButton(0, 177, true))
+	BeginTextCommandScaleformString('STRING')
+	AddTextComponentSubstringPlayerName(locale('ui_cancel'))
+	EndTextCommandScaleformString()
+	EndScaleformMovieMethod()
+
+	BeginScaleformMovieMethod(scaleform, 'DRAW_INSTRUCTIONAL_BUTTONS')
+	EndScaleformMovieMethod()
+
+	BeginScaleformMovieMethod(scaleform, 'SET_BACKGROUND_COLOUR')
+	ScaleformMovieMethodAddParamInt(0)
+	ScaleformMovieMethodAddParamInt(0)
+	ScaleformMovieMethodAddParamInt(0)
+	ScaleformMovieMethodAddParamInt(80)
+	EndScaleformMovieMethod()
+
+	return scaleform
+end
+
+---@param ped number
+---@param hash number
+---@param metadata table?
+---@return number
+local function createHeldThrowWeapon(ped, hash, metadata)
+	RequestWeaponAsset(hash, 31, 31)
+	local timeout = GetGameTimer() + 5000
+	while not HasWeaponAssetLoaded(hash) and GetGameTimer() < timeout do
+		Wait(0)
+	end
+
+	if not HasWeaponAssetLoaded(hash) then return 0 end
+
+	local coords = GetEntityCoords(ped)
+	local prop = CreateWeaponObject(hash, 0, coords.x, coords.y, coords.z + 0.2, true, 1.0, 0)
+	RemoveWeaponAsset(hash)
+
+	if not prop or prop == 0 then return 0 end
+
+	if metadata?.tint then
+		SetWeaponObjectTintIndex(prop, metadata.tint)
+	end
+
+	local components = metadata?.components
+	if components then
+		for i = 1, #components do
+			local componentItem = Items[components[i]]
+			local hashes = componentItem?.client?.component
+			if hashes then
+				for j = 1, #hashes do
+					if DoesWeaponTakeWeaponComponent(hash, hashes[j]) then
+						GiveWeaponComponentToWeaponObject(prop, hashes[j])
+					end
+				end
+			end
+		end
+	end
+
+	SetEntityCollision(prop, false, false)
+	AttachEntityToEntity(prop, ped, GetPedBoneIndex(ped, 28422), 0.1, 0.0, 0.0, -70.0, 0.0, 0.0, true, true, false, true, 1, true)
+
+	return prop
+end
+
+RegisterNUICallback('throwWeapon', function(data, cb)
+	cb(1)
+
+	local slot = data?.slot
+	if throwingWeapon or type(slot) ~= 'number' or invBusy or usingItem or lib.progressActive() then return end
+	if cache.vehicle or IsPedFalling(playerPed) then return end
+
+	local item = PlayerData.inventory[slot]
+	local itemData = item and Items[item.name]
+	if not itemData?.weapon or itemData.throwable then return end
+
+	local throwIdentity = {
+		name = item.name,
+		serial = item.metadata?.serial,
+	}
+
+	throwingWeapon = true
 	client.closeInventory()
+
+	CreateThread(function()
+		client.player:setr('invBusy', true)
+
+		if currentWeapon?.slot == slot then
+			currentWeapon = Weapon.Disarm(currentWeapon, true)
+		end
+
+		local ped = cache.ped
+		local holdDict = 'anim@heists@narcotics@trash'
+		local holdClip = 'idle'
+		local throwDict = 'anim@heists@narcotics@trash'
+		local throwClip = 'throw_ranged_a'
+		local prop = createHeldThrowWeapon(ped, itemData.hash, item.metadata)
+
+		if prop == 0 then
+			client.player:setr('invBusy', false)
+			throwingWeapon = false
+			return
+		end
+
+		lib.requestAnimDict(holdDict)
+		TaskPlayAnim(ped, holdDict, holdClip, 8.0, -8.0, -1, 49, 0.0, false, false, false)
+
+		local scaleform = createThrowInstructionalScaleform()
+		local action
+
+		while not action do
+			DisableControlAction(0, 24, true)
+			DisableControlAction(0, 25, true)
+			DisableControlAction(0, 37, true)
+			DisableControlAction(0, 44, true)
+			DisableControlAction(0, 140, true)
+			DisableControlAction(0, 141, true)
+			DisableControlAction(0, 142, true)
+			DisableControlAction(0, 257, true)
+			DisableControlAction(0, 263, true)
+			DisableControlAction(0, 264, true)
+
+			if not IsEntityPlayingAnim(ped, holdDict, holdClip, 3) then
+				TaskPlayAnim(ped, holdDict, holdClip, 8.0, -8.0, -1, 49, 0.0, false, false, false)
+			end
+
+			DrawScaleformMovieFullscreen(scaleform, 255, 255, 255, 255, 0)
+
+			if PlayerData.dead or IsPedFatallyInjured(ped) or IsPedFalling(ped) or cache.vehicle then
+				action = 'cancel'
+			elseif IsDisabledControlJustPressed(0, 25) then
+				action = 'throw'
+			elseif IsDisabledControlJustPressed(0, 177) or IsDisabledControlJustPressed(0, 202) then
+				action = 'cancel'
+			end
+
+			Wait(0)
+		end
+
+		SetScaleformMovieAsNoLongerNeeded(scaleform)
+
+		if action ~= 'throw' then
+			if DoesEntityExist(prop) then DeleteEntity(prop) end
+			StopAnimTask(ped, holdDict, holdClip, 1.0)
+			ClearPedSecondaryTask(ped)
+			RemoveAnimDict(holdDict)
+			client.player:setr('invBusy', false)
+			throwingWeapon = false
+			return
+		end
+
+		StopAnimTask(ped, holdDict, holdClip, 1.0)
+		ClearPedSecondaryTask(ped)
+
+		lib.requestAnimDict(throwDict)
+		local throwDuration = math.floor((GetAnimDuration(throwDict, throwClip) or 0.0) * 1000)
+		if throwDuration < 800 then throwDuration = 1500 end
+
+		TaskPlayAnim(ped, throwDict, throwClip, 8.0, -8.0, throwDuration, 0, 0.0, false, false, false)
+		Wait(math.floor(throwDuration * 0.45))
+
+		if DoesEntityExist(prop) then
+			DetachEntity(prop, true, true)
+			SetEntityCollision(prop, true, true)
+			SetEntityDynamic(prop, true)
+			ActivatePhysics(prop)
+
+			local camRot = GetGameplayCamRot(2)
+			local radZ = camRot.z * (math.pi / 180.0)
+			local radX = camRot.x * (math.pi / 180.0)
+			local dir = vec3(
+				-math.sin(radZ) * math.abs(math.cos(radX)),
+				math.cos(radZ) * math.abs(math.cos(radX)),
+				math.sin(radX)
+			)
+			local speed = 14.0
+			SetEntityVelocity(prop, dir.x * speed, dir.y * speed, dir.z * speed + 2.0)
+			SetEntityHeading(prop, camRot.z)
+		end
+
+		Wait(math.max(0, throwDuration - math.floor(throwDuration * 0.45)))
+		RemoveAnimDict(throwDict)
+
+		local timeout = GetGameTimer() + 5000
+		while GetGameTimer() < timeout do
+			Wait(50)
+			if not DoesEntityExist(prop) then break end
+
+			local velocity = GetEntityVelocity(prop)
+			if math.abs(velocity.x) + math.abs(velocity.y) + math.abs(velocity.z) < 0.2 and not IsEntityInAir(prop) then
+				Wait(150)
+				break
+			end
+		end
+
+		local landCoords = DoesEntityExist(prop) and GetEntityCoords(prop) or GetEntityCoords(ped)
+		if DoesEntityExist(prop) then
+			DeleteEntity(prop)
+		end
+
+		ClearPedTasks(ped)
+
+		local success, response = lib.callback.await('ox_inventory:throwWeapon', false, slot, {
+			x = landCoords.x,
+			y = landCoords.y,
+			z = landCoords.z,
+		}, throwIdentity)
+
+		if success and response then
+			updateInventory(response.items, response.weight)
+		end
+
+		client.player:setr('invBusy', false)
+		throwingWeapon = false
+	end)
+end)
+
+RegisterNUICallback('exit', function(_, cb)
+	if WeaponCustomize.isOpen() then
+		WeaponCustomize.close()
+	else
+		client.closeInventory()
+	end
 	cb(1)
 end)
 

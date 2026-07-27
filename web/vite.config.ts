@@ -8,7 +8,10 @@ export default defineConfig({
   publicDir: false,
   build: {
     outDir: 'build',
-    target: 'esnext',
+    // FiveM CEF is Chromium-based; avoid bleeding-edge JS syntax.
+    target: 'chrome91',
+    // Keep rgba() instead of #rrggbbaa (unsupported / flaky in older CEF).
+    cssTarget: 'chrome61',
     emptyOutDir: true,
     rolldownOptions: {
       output: {

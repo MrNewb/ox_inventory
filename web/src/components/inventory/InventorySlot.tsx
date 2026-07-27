@@ -15,6 +15,8 @@ import { ItemsPayload } from '../../reducers/refreshSlots';
 import { closeTooltip, openTooltip } from '../../store/tooltip';
 import { openContextMenu } from '../../store/contextMenu';
 import { useMergeRefs } from '@floating-ui/react';
+import RarityStar from '../utils/icons/RarityStar';
+import RarityEffect from '../utils/icons/RarityEffect';
 
 interface SlotProps {
   inventoryId: Inventory['id'];
@@ -213,6 +215,8 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
                 )}
               </>
             )}
+            {item.metadata?.rarity && <RarityStar rarity={item.metadata.rarity} />}
+            {item.metadata?.rarity && <RarityEffect rarity={item.metadata.rarity} />}
             <div className="inventory-slot-label-box">
               <div className="inventory-slot-label-text">
                 {item.metadata?.label ? item.metadata.label : Items[item.name]?.label || item.name}

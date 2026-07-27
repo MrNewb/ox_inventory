@@ -5,7 +5,7 @@ game 'gta5'
 name 'ox_inventory'
 author 'Overextended'
 version '2.47.9'
-repository 'https://github.com/overextended/ox_inventory'
+repository 'https://github.com/MrNewb/ox_inventory'
 description 'Slot-based inventory with item metadata support'
 
 dependencies {
@@ -21,6 +21,7 @@ ox_libs {
     'locale',
     'table',
     'math',
+    'string',
 }
 
 server_scripts {
@@ -43,5 +44,6 @@ files {
     'modules/**/shared.lua',
     'modules/**/client.lua',
     'modules/bridge/**/client.lua',
+    'modules/weapon/customize.lua',
     'data/*.lua',
 }

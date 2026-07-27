@@ -186,7 +186,35 @@ Item('clothing', function(data, slot)
 	end)
 end)
 
------------------------------------------------------------------------------------------------
+RegisterNetEvent('ox_inventory:registerItems', function(items)
+	if source ~= 65535 or type(items) ~= 'table' then return end
+
+	local nuiItems = {}
+
+	for i = 1, #items do
+		local data = items[i]
+
+		if type(data) == 'table' and type(data.name) == 'string' then
+			shared.registerItem(data)
+
+			local item = Items[data.name]
+			nuiItems[#nuiItems + 1] = {
+				name = item.name,
+				label = item.label,
+				stack = item.stack,
+				close = item.close,
+				count = 0,
+				description = item.description,
+				ammoName = item.ammoname,
+				image = item.client and item.client.image,
+			}
+		end
+	end
+
+	if nuiItems[1] then
+		SendNUIMessage({ action = 'setItemData', data = nuiItems })
+	end
+end)
 
 exports('Items', function(item) return getItem(nil, item) end)
 exports('ItemList', function(item) return getItem(nil, item) end)

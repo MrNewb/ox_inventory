@@ -113,6 +113,112 @@ CreateThread(function()
 		end
 
 		Wait(500)
+
+	elseif shared.framework == 'qb' then
+		local QBCore = exports['qb-core']:GetCoreObject()
+		local items = QBCore.Shared.Items
+
+		if items and table.type(items) ~= 'empty' then
+			local dump = {}
+			local count = 0
+			local ignoreList = {
+				"weapon_",
+				"pistol_",
+				"pistol50_",
+				"revolver_",
+				"smg_",
+				"combatpdw_",
+				"shotgun_",
+				"rifle_",
+				"carbine_",
+				"gusenberg_",
+				"sniper_",
+				"snipermax_",
+				"tint_",
+				"_ammo"
+			}
+
+			local function checkIgnoredNames(name)
+				for i = 1, #ignoreList do
+					if string.find(name, ignoreList[i]) then
+						return true
+					end
+				end
+				return false
+			end
+
+			for k, item in pairs(items) do
+				-- Some people don't assign the name property, but it seemingly always matches the index anyway.
+				if type(item) == 'table' then
+					if not item.name then item.name = k end
+
+					if not ItemList[item.name] and not checkIgnoredNames(item.name) then
+						item.close = item.shouldClose == nil and true or item.shouldClose
+						item.stack = not item.unique and true
+						item.description = item.description
+						item.weight = item.weight or 0
+						dump[k] = item
+						count += 1
+					end
+				end
+			end
+
+			if table.type(dump) ~= 'empty' then
+				local file = {string.strtrim(LoadResourceFile(shared.resource, 'data/items.lua'))}
+				file[1] = file[1]:gsub('}$', '')
+
+				---@todo separate into functions for reusability, properly handle nil values
+				local itemFormat = [[
+
+	[%q] = {
+		label = %q,
+		weight = %s,
+		stack = %s,
+		close = %s,
+		description = %q,
+		client = {
+			status = {
+				hunger = %s,
+				thirst = %s,
+				stress = %s
+			},
+			image = %q,
+		}
+	},
+]]
+
+				local fileSize = #file
+
+				for _, item in pairs(dump) do
+					if not ItemList[item.name] then
+						fileSize += 1
+
+						-- ox_inventory already defaults an item's image to '<name>.png', so skip
+						-- writing client.image when the QB image is just that default.
+						local image = item.image
+						if image and image == item.name .. '.png' then image = nil end
+
+						local itemStr = itemFormat:format(item.name, item.label, item.weight, item.stack, item.close, item.description or 'nil', item.hunger or 'nil', item.thirst or 'nil', item.stress or 'nil', image or 'nil')
+						-- temporary solution for nil values
+						itemStr = itemStr:gsub('[%s]-[%w]+ = "?nil"?,?', '')
+						-- temporary solution for empty status table
+						itemStr = itemStr:gsub('[%s]-[%w]+ = %{[%s]+%},?', '')
+						-- temporary solution for empty client table
+						itemStr = itemStr:gsub('[%s]-[%w]+ = %{[%s]+%},?', '')
+						file[fileSize] = itemStr
+						ItemList[item.name] = item
+					end
+				end
+
+				file[fileSize+1] = '}'
+
+				SaveResourceFile(shared.resource, 'data/items.lua', table.concat(file), -1)
+				shared.info(count, 'items have been copied from the QBCore.Shared.Items.')
+				shared.info('You should restart the resource to load the new items.')
+			end
+		end
+
+		Wait(500)
 	end
 
 	local count = 0
@@ -175,7 +281,7 @@ function Items.Metadata(inv, item, metadata, count)
 
 	if item.weapon then
 		if type(metadata) ~= 'table' then metadata = {} end
-		if not metadata.durability then 
+		if not metadata.durability then
 			metadata = setItemDurability(item, metadata)
 		end
 		if not metadata.ammo and item.ammoname then metadata.ammo = 0 end
@@ -219,6 +325,10 @@ function Items.Metadata(inv, item, metadata, count)
 
 	if count > 1 and not item.stack then
 		count = 1
+	end
+
+	if item.rarity and not metadata.rarity then
+		metadata.rarity = item.rarity
 	end
 
 	local hooks <close> = TriggerEventHooks('createItem', {
@@ -368,6 +478,128 @@ end
 -- 	end
 -- end)
 
------------------------------------------------------------------------------------------------
+local runtimeItems = {}
+
+local optionalFields = {
+	weight = 'number',
+	stack = 'boolean',
+	close = 'boolean',
+	description = 'string',
+	consume = 'number',
+	degrade = 'number',
+	decay = 'boolean',
+	weapon = 'boolean',
+	client = 'table',
+	server = 'table',
+	buttons = 'table',
+}
+
+local function validateItem(data)
+	if type(data) ~= 'table' then return warn('item must be a table') or false end
+	if type(data.name) ~= 'string' or string.isBlank(data.name) then return warn('item.name must be a non-empty string') or false end
+	if type(data.label) ~= 'string' or string.isBlank(data.label) then return warn('item.label must be a non-empty string') or false end
+
+	for field, expected in pairs(optionalFields) do
+		local value = data[field]
+		if value ~= nil and type(value) ~= expected then
+			return warn(('item.%s must be a %s'):format(field, expected)) or false
+		end
+	end
+
+	return true
+end
+
+local function serializeItem(item)
+	local lines = {
+		('\t[%q] = {'):format(item.name),
+		('\t\tlabel = %q,'):format(item.label),
+	}
+
+	if item.weight then lines[#lines + 1] = ('\t\tweight = %d,'):format(math.floor(item.weight)) end
+	if item.stack ~= nil then lines[#lines + 1] = ('\t\tstack = %s,'):format(item.stack) end
+	if item.close ~= nil then lines[#lines + 1] = ('\t\tclose = %s,'):format(item.close) end
+	if not string.isBlank(item.description or '') then lines[#lines + 1] = ('\t\tdescription = %q,'):format(item.description) end
+
+	local client = item.client
+	local image = client and client.image
+	local status = client and client.status
+
+	if image == item.name .. '.png' then image = nil end
+
+	if image or status then
+		lines[#lines + 1] = '\t\tclient = {'
+		if image then lines[#lines + 1] = ('\t\t\timage = %q,'):format(image) end
+
+		if status then
+			lines[#lines + 1] = '\t\t\tstatus = {'
+			for key, value in pairs(status) do
+				lines[#lines + 1] = ('\t\t\t\t%s = %s,'):format(key, value)
+			end
+			lines[#lines + 1] = '\t\t\t},'
+		end
+
+		lines[#lines + 1] = '\t\t},'
+	end
+
+	lines[#lines + 1] = '\t},'
+	return table.concat(lines, '\n')
+end
+
+local function persistItem(item)
+	local content = LoadResourceFile(shared.resource, 'data/items.lua')
+	if not content then
+		return warn(('unable to read data/items.lua while persisting item "%s"'):format(item.name))
+	end
+
+	if content:find('%[%s*[\'"]' .. string.escapePattern(item.name) .. '[\'"]%s*%]') then return end
+
+	local body = string.strtrim(content):gsub('}%s*$', ''):gsub('%s+$', '')
+	if not string.endsWith(body, ',') then body = body .. ',' end
+
+	SaveResourceFile(shared.resource, 'data/items.lua', ('%s\n%s\n}\n'):format(body, serializeItem(item)), -1)
+end
+
+function Items.syncRuntimeItems(source)
+	local definitions = {}
+
+	for _, definition in pairs(runtimeItems) do
+		definitions[#definitions + 1] = definition
+	end
+
+	if definitions[1] then
+		TriggerClientEvent('ox_inventory:registerItems', source, definitions)
+	end
+end
+
+---@param data OxItem
+---@return boolean
+exports('RegisterItem', function(data)
+	if not validateItem(data) then return false end
+
+	local name = data.name:lower()
+	if string.startsWith(name, 'weapon_') then name = name:upper() end
+	data.name = name
+
+	shared.registerItem(table.clone(data))
+
+	local definition = {
+		name = name,
+		label = data.label,
+		weight = data.weight,
+		stack = data.stack,
+		close = data.close,
+		consume = data.consume,
+		degrade = data.degrade,
+		decay = data.decay,
+		description = data.description,
+		client = data.client,
+	}
+
+	runtimeItems[name] = definition
+	persistItem(data)
+	TriggerClientEvent('ox_inventory:registerItems', -1, { definition })
+
+	return true
+end)
 
 return Items

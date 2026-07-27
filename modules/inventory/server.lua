@@ -1550,6 +1550,25 @@ local function generateInvId(prefix)
 	end
 end
 
+local function normalizeDropModel(dropModel)
+	if type(dropModel) == 'table' then
+		dropModel = dropModel.model or dropModel[1]
+	end
+
+	if type(dropModel) == 'string' then
+		dropModel = joaat(dropModel)
+	end
+
+	if type(dropModel) == 'number' and dropModel ~= 0 then
+		return dropModel
+	end
+end
+
+local function getItemDropModel(itemName)
+	local item = itemName and Items(itemName)
+	return item and normalizeDropModel(item.dropmodel or item.dropModel)
+end
+
 local function CustomDrop(prefix, items, coords, slots, maxWeight, instance, model)
 	local dropId = generateInvId()
 	local inventory = Inventory.Create(dropId, ('%s %s'):format(prefix, dropId:gsub('%D', '')), 'drop', slots or shared.dropslots, 0, maxWeight or shared.dropweight, false, {})
@@ -1561,7 +1580,7 @@ local function CustomDrop(prefix, items, coords, slots, maxWeight, instance, mod
 	Inventory.Drops[dropId] = {
 		coords = inventory.coords,
 		instance = instance,
-		model = model,
+		model = normalizeDropModel(model),
 	}
 
 	TriggerClientEvent('ox_inventory:createDrop', -1, dropId, Inventory.Drops[dropId])
@@ -1584,9 +1603,17 @@ exports('CreateDropFromPlayer', function(playerId)
 
 	local coords = GetEntityCoords(GetPlayerPed(playerId))
 	inventory.coords = vec3(coords.x, coords.y, coords.z-0.2)
+
+	local dropModel
+	for _, slotData in pairs(inventory.items) do
+		dropModel = getItemDropModel(slotData.name)
+		if dropModel then break end
+	end
+
 	Inventory.Drops[dropId] = {
 		coords = inventory.coords,
-		instance = Player(playerId).state.instance
+		instance = Player(playerId).state.instance,
+		model = dropModel,
 	}
 
 	Inventory.Clear(playerInventory)
@@ -1660,7 +1687,7 @@ local function dropItem(source, playerInventory, fromData, data)
 	if not inventory then hooks.success = false return end
 
 	inventory.coords = data.coords
-	Inventory.Drops[dropId] = {coords = inventory.coords, instance = data.instance}
+	Inventory.Drops[dropId] = {coords = inventory.coords, instance = data.instance, model = getItemDropModel(toData.name)}
 	playerInventory.changed = true
 
 	TriggerClientEvent('ox_inventory:createDrop', -1, dropId, Inventory.Drops[dropId], playerInventory.open and source, slot)
@@ -1683,6 +1710,143 @@ local function dropItem(source, playerInventory, fromData, data)
 end
 
 local GetLocks = require 'modules.locks'
+
+lib.callback.register('ox_inventory:throwWeapon', function(source, slot, coords, identity)
+	local ped = GetPlayerPed(source)
+	if ped == 0 or not DoesEntityExist(ped) then return false end
+	if GetVehiclePedIsIn(ped, false) ~= 0 then return false end
+
+	if type(slot) ~= 'number' or slot ~= math.floor(slot) or slot < 1 then return false end
+	if type(coords) ~= 'table' or type(identity) ~= 'table' then return false end
+	if type(identity.name) ~= 'string' or identity.name == '' then return false end
+	if identity.serial ~= nil and type(identity.serial) ~= 'string' then return false end
+
+	local x, y, z = tonumber(coords.x), tonumber(coords.y), tonumber(coords.z)
+	if not x or not y or not z then return false end
+	if x ~= x or y ~= y or z ~= z then return false end
+	if math.abs(x) > 10000.0 or math.abs(y) > 10000.0 or math.abs(z) > 2500.0 then return false end
+
+	local playerInventory = Inventory(source)
+	if not playerInventory or slot > playerInventory.slots then return false end
+
+	local activeSlots <close> = GetLocks({
+		('inventory-%s:slot-%s'):format(playerInventory.id, slot),
+	})
+
+	if not activeSlots then return false end
+
+	local fromData = playerInventory.items[slot]
+	if not fromData or fromData.count ~= 1 or type(fromData.metadata) ~= 'table' then return false end
+
+	if identity.name ~= fromData.name then
+		Utils.LogExploit(source, 'throwWeapon', 'Identity name mismatch', false)
+		return false
+	end
+
+	local serial = fromData.metadata.serial
+	if type(serial) == 'string' and serial ~= '' and identity.serial ~= serial then
+		Utils.LogExploit(source, 'throwWeapon', 'Identity serial mismatch', false)
+		return false
+	end
+
+	local item = Items(fromData.name)
+	if not item?.weapon or item.throwable or not item.hash then return false end
+
+	local dropCoords = vec3(x, y, z)
+	local playerCoords = GetEntityCoords(ped)
+	if #(playerCoords - dropCoords) > 35.0 then
+		Utils.LogExploit(source, 'throwWeapon', 'Drop coords out of range', false)
+		return false
+	end
+
+	local toData = table.clone(fromData)
+	toData.slot = 1
+	toData.count = 1
+	toData.weight = Inventory.SlotWeight(item, toData)
+
+	local dropId = generateInvId('drop')
+	local hooks <close> = TriggerEventHooks('swapItems', {
+		source = source,
+		fromInventory = playerInventory.id,
+		fromSlot = fromData,
+		fromType = playerInventory.type,
+		toInventory = 'newdrop',
+		toSlot = 1,
+		toType = 'drop',
+		count = 1,
+		action = 'move',
+		dropId = dropId,
+	})
+
+	if not hooks.success then return false end
+	if Inventories[playerInventory.id] ~= playerInventory then
+		hooks.success = false
+		return false
+	end
+
+	fromData = playerInventory.items[slot]
+	if not fromData or fromData.count ~= 1 or fromData.name ~= identity.name then
+		hooks.success = false
+		return false
+	end
+
+	if type(serial) == 'string' and serial ~= '' and fromData.metadata?.serial ~= serial then
+		hooks.success = false
+		return false
+	end
+
+	toData = table.clone(fromData)
+	toData.slot = 1
+	toData.count = 1
+	toData.weight = Inventory.SlotWeight(item, toData)
+
+	playerInventory.weight -= toData.weight
+	playerInventory.items[slot] = nil
+
+	if slot == playerInventory.weapon then
+		playerInventory.weapon = nil
+	end
+
+	local inventory = Inventory.Create(dropId, ('Drop %s'):format(dropId:gsub('%D', '')), 'drop', 1, toData.weight, toData.weight, false, { [1] = toData })
+
+	if not inventory then
+		hooks.success = false
+		playerInventory.weight += toData.weight
+		playerInventory.items[slot] = fromData
+		return false
+	end
+
+	inventory.coords = dropCoords
+	inventory.takeOnly = true
+	playerInventory.changed = true
+
+	Inventory.Drops[dropId] = {
+		coords = dropCoords,
+		instance = Player(source).state.instance,
+		model = item.hash,
+		weapon = true,
+		tint = toData.metadata?.tint,
+		components = toData.metadata?.components,
+	}
+
+	TriggerClientEvent('ox_inventory:createDrop', -1, dropId, Inventory.Drops[dropId], playerInventory.open and source, slot)
+
+	if server.loglevel > 0 then
+		lib.logger(playerInventory.owner, 'swapSlots', ('threw %s from "%s" to "%s"'):format(toData.name, playerInventory.label, dropId))
+	end
+
+	if server.syncInventory then server.syncInventory(playerInventory) end
+
+	return true, {
+		weight = playerInventory.weight,
+		items = {
+			{
+				item = { slot = slot },
+				inventory = playerInventory.id
+			}
+		}
+	}
+end)
 
 ---@param source number
 ---@param data SwapSlotData
@@ -1707,6 +1871,10 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
 	end
 
     if data.toType == 'inspect' or data.fromType == 'inspect' then return end
+
+	if toInventory.takeOnly and fromInventory ~= toInventory then
+		return false
+	end
 
     local activeSlots <close> = GetLocks({
        	('inventory-%s:slot-%s'):format(fromInventory.id, data.fromSlot),
@@ -2573,23 +2741,34 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 	local vtype = type(value)
 
 	if vtype == 'table' and action == 'component' then
+		if type(value.slot) ~= 'number' or type(value.component) ~= 'string' or value.component == '' then return end
+
 		local item = inventory.items[value.slot]
+		if not item?.metadata then return end
 
-		if item then
-			if item.metadata.components then
-				for k, v in pairs(item.metadata.components) do
-					if v == value.component then
-						if not Inventory.AddItem(inventory, value.component, 1) then return end
+		local weaponItem = Items(item.name)
+		if not weaponItem?.weapon then return end
 
-						table.remove(item.metadata.components, k)
-						inventory:syncSlotsWithPlayer({
-							{ item = item }
-						}, inventory.weight)
+		local componentItem = Items(value.component)
+		if not componentItem?.component or componentItem.weapon then
+			Utils.LogExploit(source, 'updateWeapon', 'Attempted to remove invalid weapon component', false)
+			return
+		end
 
-			            if server.syncInventory then server.syncInventory(inventory) end
+		if item.metadata.components then
+			for k, v in pairs(item.metadata.components) do
+				if v == value.component then
+					if not Inventory.AddItem(inventory, value.component, 1) then return end
 
-						return true
-					end
+					table.remove(item.metadata.components, k)
+					item.weight = Inventory.SlotWeight(weaponItem, item)
+					inventory:syncSlotsWithPlayer({
+						{ item = item }
+					}, inventory.weight)
+
+					if server.syncInventory then server.syncInventory(inventory) end
+
+					return true
 				end
 			end
 		end
@@ -2620,17 +2799,50 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 				weapon.metadata.specialAmmo = specialAmmo
 				weapon.weight = Inventory.SlotWeight(item, weapon)
 			elseif action == 'throw' then
+				if not item.throwable then
+					Utils.LogExploit(source, 'updateWeapon', 'Attempted throw action on non-throwable weapon', true)
+					return
+				end
+
 				if not Inventory.RemoveItem(inventory, weapon.name, 1, weapon.metadata, weapon.slot) then return end
 			elseif action == 'component' then
 				if vtype == 'number' then
-					if not Inventory.AddItem(inventory, weapon.metadata.components[value], 1) then return false end
+					local componentName = weapon.metadata.components and weapon.metadata.components[value]
+					if type(componentName) ~= 'string' then return false end
+
+					local componentItem = Items(componentName)
+					if not componentItem?.component or componentItem.weapon then
+						Utils.LogExploit(source, 'updateWeapon', 'Attempted to detach invalid weapon component', false)
+						return false
+					end
+
+					if not Inventory.AddItem(inventory, componentName, 1) then return false end
 
 					table.remove(weapon.metadata.components, value)
 					weapon.weight = Inventory.SlotWeight(item, weapon)
 				elseif vtype == 'string' then
-					local component = inventory.items[tonumber(value)]
+					local componentSlot = tonumber(value)
+					if not componentSlot or componentSlot == slot then return false end
 
-					if not Inventory.RemoveItem(inventory, component.name, 1) then return false end
+					local component = inventory.items[componentSlot]
+					if not component then return false end
+
+					local componentItem = Items(component.name)
+					if not componentItem?.component or componentItem.weapon or componentItem.ammo then
+						Utils.LogExploit(source, 'updateWeapon', 'Attempted to attach non-component item', true)
+						return false
+					end
+
+					weapon.metadata.components = weapon.metadata.components or {}
+
+					for i = 1, #weapon.metadata.components do
+						local attached = Items(weapon.metadata.components[i])
+						if attached?.type and attached.type == componentItem.type then
+							return false
+						end
+					end
+
+					if not Inventory.RemoveItem(inventory, component.name, 1, nil, componentSlot) then return false end
 
 					table.insert(weapon.metadata.components, component.name)
 					weapon.weight = Inventory.SlotWeight(item, weapon)
@@ -2675,6 +2887,66 @@ lib.callback.register('ox_inventory:updateWeapon', updateWeapon)
 
 RegisterNetEvent('ox_inventory:updateWeapon', function(action, value, slot, specialAmmo)
 	updateWeapon(source, action, value, slot, specialAmmo)
+end)
+
+local mk2Tints = { [0] = 0, [1] = 18, [2] = 23, [3] = 13, [4] = 8, [5] = 22, [6] = 15, [7] = 24 }
+
+lib.callback.register('ox_inventory:customizeApplyTint', function(source, weaponSlot, tintSlot)
+	local inventory = Inventory(source)
+	if not inventory then return false end
+	if type(weaponSlot) ~= 'number' or type(tintSlot) ~= 'number' or weaponSlot == tintSlot then return false end
+
+	local weapon = inventory.items[weaponSlot]
+	local tintItem = inventory.items[tintSlot]
+	if not weapon or not tintItem then return false end
+
+	local weaponData = Items(weapon.name)
+	local tintData = Items(tintItem.name)
+	if not weaponData?.weapon or not tintData then return false end
+	if tintData.weapon or tintData.component or tintData.ammo then return false end
+
+	local tintIndex = tintData.server?.tint
+	if type(tintIndex) ~= 'number' then return false end
+
+	if weapon.name:upper():find('MK2', 1, true) then
+		tintIndex = mk2Tints[tintIndex] or tintIndex
+	end
+
+	if not Inventory.RemoveItem(inventory, tintItem.name, 1, nil, tintSlot) then return false end
+
+	weapon.metadata.tint = tintIndex
+	weapon.metadata.weapontint = tintItem.metadata?.label or tintData.label
+	weapon.weight = Inventory.SlotWeight(weaponData, weapon)
+
+	inventory:syncSlotsWithPlayer({
+		{ item = weapon }
+	}, inventory.weight)
+
+	if server.syncInventory then server.syncInventory(inventory) end
+
+	return true
+end)
+
+lib.callback.register('ox_inventory:customizeClearTint', function(source, weaponSlot)
+	local inventory = Inventory(source)
+	if not inventory then return false end
+	if type(weaponSlot) ~= 'number' then return false end
+
+	local weapon = inventory.items[weaponSlot]
+	if not weapon then return false end
+
+	local weaponData = Items(weapon.name)
+	if not weaponData?.weapon then return false end
+
+	weapon.metadata.tint = 0
+	weapon.metadata.weapontint = nil
+	weapon.weight = Inventory.SlotWeight(weaponData, weapon)
+
+	inventory:syncSlotsWithPlayer({{ item = weapon }}, inventory.weight)
+
+	if server.syncInventory then server.syncInventory(inventory) end
+
+	return true
 end)
 
 lib.callback.register('ox_inventory:removeAmmoFromWeapon', function(source, slot)

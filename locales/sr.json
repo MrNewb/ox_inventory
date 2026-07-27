@@ -1,4 +1,3 @@
-
 {
   "ui_use": "Koristi",
   "ui_give": "Daj",
@@ -89,5 +88,29 @@
   "crafting_item": "Kraftovanje %s",
   "crafting_bench": "Sto za Kraftovanje",
   "open_crafting_bench": "Otvori sto za kraftovanje",
-  "not_enough_durability": "%s nema dovoljno izdrzljivosti"
+  "not_enough_durability": "%s nema dovoljno izdrzljivosti",
+  "ui_customize": "Прилагоди",
+  "ui_customize_back": "Назад у инвентар",
+  "ui_customize_empty": "Нема компатибилних додатака",
+  "ui_customize_equipped": "Опремљено",
+  "ui_customize_add": "Изабери додатак за додавање",
+  "ui_customize_remove": "Уклони",
+  "ui_customize_none": "Нема",
+  "ui_customize_rotate": "Превуци за окретање",
+  "ui_customize_help": "Прилагођавање оружја",
+  "ui_customize_help_drag": "Превуци по празном простору да окренеш преглед оружја",
+  "ui_customize_help_slot": "Кликни на пин додатка за компатибилне делове тог слота",
+  "ui_customize_help_apply": "Кликни на додатак на листи да га уградиш",
+  "ui_customize_help_remove": "Користи Уклони да склониш опремљени додатак",
+  "ui_customize_help_close": "Кликни на празан простор или × да затвориш панел",
+  "ui_customize_help_info": "Леви панел приказује уграђене додатке и компатибилне делове у инвентару",
+  "ui_customize_help_tint": "Скинови користе skin компоненте. Нијансе користе tint предмете и одвојене су од скинова",
+  "ui_throw": "Баци",
+  "ui_customize_available": "Доступно",
+  "ui_customize_no_inventory": "Нема у инвентару",
+  "ui_accuracy": "Прецизност",
+  "ui_range": "Домет",
+  "ui_damage": "Штета",
+  "ui_fire_rate": "Брзина паљбе",
+  "ui_rarity": "Реткост"
 }

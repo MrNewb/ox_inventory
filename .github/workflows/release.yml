@@ -94,6 +94,8 @@ jobs:
             --exclude 'release' \
             --exclude 'web' \
             --exclude 'node_modules' \
+            --exclude 'readmeimages' \
+            --exclude '*.gif' \
             ./ "$RELEASE_ROOT/"
 
           # Ship the compiled UI only (no src/, no node_modules, no build tooling).
